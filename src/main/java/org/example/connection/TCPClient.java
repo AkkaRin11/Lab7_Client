@@ -43,4 +43,8 @@ public class TCPClient {
         }
     }
 
+//    public boolean isClosed(){
+//        return socket.isInputShutdown();
+//    }
+
 }

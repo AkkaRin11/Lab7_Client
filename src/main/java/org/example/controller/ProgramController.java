@@ -9,6 +9,7 @@ import org.example.connection.TCPClient;
 import org.example.exception.ClosureFailedException;
 import org.example.exception.NonWorkingServerException;
 import org.example.util.PersonData;
+import org.example.util.Validation;
 
 import java.io.IOException;
 import java.net.SocketException;
@@ -67,6 +68,104 @@ public class ProgramController {
         thread.setDaemon(true);
         Runtime.getRuntime().addShutdownHook(thread);
 
+        auth();
+
+        try {
+            while (consoleController.hasNext()) {
+                String line = consoleController.readNextLine();
+                if (line == null) { // Check for EOF (Ctrl+D)
+
+                    try {
+                        tcpClient.close();
+                    } catch (ClosureFailedException exception){
+                        consoleController.print("При завершении соединения произошла ошибка");
+                    }
+
+                    System.exit(1);
+                }
+
+                if (line.isEmpty()) {
+                    continue;
+                }
+
+                String[] str = line.trim().split("\\s+");
+                if (str.length == 0) {
+                    continue;
+                }
+
+//                if(tcpClient.isClosed()){
+//                    throw new NonWorkingServerException();
+//                }
+
+
+                if (!CommandController.isValidCommand(str[0])) {
+                    consoleController.println(str[0] + ": Имя " + str[0] +
+                            " не распознано как имя командлета, функции, файла сценария или выполняемой программы\n" +
+                            "Проверьте правильность написания имени, после чего повторите попытку.");
+                    System.out.print("> ");
+                    continue;
+                }
+
+                if (str[0].equals("logout")){
+                    PersonData.getInstance().setUserName(null);
+                    PersonData.getInstance().setUserPass(null);
+                    System.out.println("Вы вышли из акаунта");
+                    auth();
+                    System.out.print("> ");
+                    continue;
+                }
+
+                if (str[0].equals("update")){
+                    if(str.length != 2 && Validation.checkIntNumber(str[1])) {
+                        System.out.println("Неверное количество аргументов или неверные аргументы");
+                    }
+
+                    Response testResponse = sender.sendRequest(new CommandRequest("check_id", str, ""));
+
+                    if (testResponse.getStatusCode() == StatusCode._500_SERVER_ERROR){
+                        System.out.print("Элемента с таким id не существует или к нему нету доступа\n> ");
+                        continue;
+                    }
+                }
+
+                String[] args = new String[str.length - 1];
+                System.arraycopy(str, 1, args, 0, str.length - 1);
+
+                CommandRequest commandRequest = commandController.buildCommand(str[0], args);
+
+                if (commandRequest != null){
+
+                    Response response;
+
+                    try{
+                        response = sender.sendRequest(commandRequest);
+                    } catch (SocketException e){
+//                        consoleController.println("Сервер не запущен");
+                        throw new NonWorkingServerException();
+                    }
+
+                    consoleController.println(responseHandler.handleResponse(response));
+
+
+                } else {
+                    consoleController.println("Неверное количество аргументов или используемые файлы недоступны");
+                }
+
+                consoleController.print("> ");
+            }
+        } catch (Exception e) {
+            consoleController.println("Произошла ошибка сервера: " + e.getMessage());
+            throw new NonWorkingServerException();
+//            try {
+//                tcpClient.close();
+//            } catch (ClosureFailedException exception){
+//                consoleController.print("При завершении соединения произошла ошибка");
+//            }
+//            System.exit(1);
+        }
+    }
+
+    public void auth() throws NonWorkingServerException {
         try {
 
             System.out.println("Для подолжения работы вам нужно авторизоваться");
@@ -109,75 +208,7 @@ public class ProgramController {
 
         }
 
-
         consoleController.println("Вы успешно авторизовались\nДля получения списка команд напишите: help");
         System.out.print("> ");
-
-        try {
-            while (consoleController.hasNext()) {
-                String line = consoleController.readNextLine();
-                if (line == null) { // Check for EOF (Ctrl+D)
-
-                    try {
-                        tcpClient.close();
-                    } catch (ClosureFailedException exception){
-                        consoleController.print("При завершении соединения произошла ошибка");
-                    }
-
-                    System.exit(1);
-                }
-
-                if (line.isEmpty()) {
-                    continue;
-                }
-
-                String[] str = line.trim().split("\\s+");
-                if (str.length == 0) {
-                    continue;
-                }
-
-                if (!CommandController.isValidCommand(str[0])) {
-                    consoleController.println(str[0] + ": Имя " + str[0] +
-                            " не распознано как имя командлета, функции, файла сценария или выполняемой программы\n" +
-                            "Проверьте правильность написания имени, после чего повторите попытку.");
-                    System.out.print("> ");
-                    continue;
-                }
-
-                String[] args = new String[str.length - 1];
-                System.arraycopy(str, 1, args, 0, str.length - 1);
-
-                CommandRequest commandRequest = commandController.buildCommand(str[0], args);
-
-                if (commandRequest != null){
-
-                    Response response;
-
-                    try{
-                        response = sender.sendRequest(commandRequest);
-                    } catch (SocketException e){
-//                        consoleController.println("Сервер не запущен");
-                        throw new NonWorkingServerException();
-                    }
-
-                    consoleController.println(responseHandler.handleResponse(response));
-
-
-                } else {
-                    consoleController.println("Неверное количество аргументов или используемые файлы недоступны");
-                }
-
-                consoleController.print("> ");
-            }
-        } catch (Exception e) {
-            consoleController.println("Произошла ошибка сервера: " + e.getMessage());
-            throw new NonWorkingServerException();
-//            try {
-//                tcpClient.close();
-//            } catch (ClosureFailedException exception){
-//                consoleController.print("При завершении соединения произошла ошибка");
-//            }
-//            System.exit(1);
-        }
     }
 }
